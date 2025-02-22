@@ -95,10 +95,6 @@ def safe_eval(expression: str, variables: Dict[str, Any]) -> Any:
 def _eval_node(node: ast.AST, variables: Dict[str, Any]) -> Any:
     if isinstance(node, ast.Constant):
         return node.value
-    elif isinstance(node, ast.Num):
-        return node.n
-    elif isinstance(node, ast.Str):
-        return node.s
     elif isinstance(node, ast.BinOp):
         left = _eval_node(node.left, variables)
         right = _eval_node(node.right, variables)
@@ -535,11 +531,38 @@ class Interpreter:
             self.eungdi(f"HTTP 요청 실패: {e}", error=True)
 
     def handle_json_load(self, match, line: str) -> None:
+        json_str = match.group(1).strip()
         try:
-            obj = json.loads(match.group(1))
-            self.eungdi(f"JSON 객체: {obj}")
+            json_str = bytes(json_str, "utf-8").decode("unicode_escape")
         except Exception as e:
+            self.eungdi(f"JSON 문자열 디코딩 실패: {e}", error=True)
+            return
+        if json_str.startswith('"') and json_str.endswith('"'):
+            json_str = json_str[1:-1].strip()
+        try:
+            obj = json.loads(json_str)
+            self.eungdi(f"JSON 객체: {obj}")
+            return
+        except json.JSONDecodeError:
+            pass
+        fixed_json_str = self.fix_json_string(json_str)
+        try:
+            obj = json.loads(fixed_json_str)
+            self.eungdi(f"JSON 객체: {obj}")
+        except json.JSONDecodeError as e:
             self.eungdi(f"JSON 변환 실패: {e}", error=True)
+
+    def fix_json_string(self, json_str: str) -> str:
+        """
+        JSON 문자열에서 잘못된 작은따옴표와 따옴표가 없는 키를 수정합니다.
+        1. { 또는 , 뒤에 오는 속성명에 자동으로 큰따옴표를 추가합니다.
+        2. 모든 작은따옴표(')를 큰따옴표(")로 변환합니다.
+        """
+        json_str = json_str.strip()
+        fixed = re.sub(r'([{,]\s*)([A-Za-z0-9_가-힣]+)(\s*:)', r'\1"\2"\3', json_str, flags=re.UNICODE)
+        fixed = fixed.replace("'", "\"")
+        return fixed.strip()
+
 
     def handle_json_dump(self, match, line: str) -> None:
         var_name = match.group(1)
@@ -617,7 +640,7 @@ class Interpreter:
             self.eungdi(f"시스템 명령 실행 결과: {result}")
         except Exception as e:
             self.eungdi(f"시스템 명령 실행 실패: {e}", error=True)
-
+    
     def handle_file_delete(self, match, line: str) -> None:
         filename = match.group(1)
         try:
