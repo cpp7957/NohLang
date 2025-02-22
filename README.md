@@ -10,9 +10,6 @@
 
 1. **Python 3.6 이상**이 설치되어 있어야 합니다.
 2. 필요한 라이브러리를 설치합니다:
-   ```sh
-   pip install requests
-   ```
 3. 인터프리터를 실행합니다:
    ```sh
    python noh_interpreter.py <파일명>.noh
